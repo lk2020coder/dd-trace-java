@@ -61,10 +61,11 @@ class DDSpanSerializationTest extends DDSpecification {
         ["a-baggage": "value"],
         false,
         spanType,
-        ["k1": "v1"],
+        1,
         PendingTrace.create(tracer, DDId.ONE),
         tracer,
         [:])
+    context.setAllTags(["k1": "v1"])
 
     DDSpan span = DDSpan.create(100L, context)
 
@@ -97,7 +98,7 @@ class DDSpanSerializationTest extends DDSpecification {
       Collections.emptyMap(),
       false,
       spanType,
-      Collections.emptyMap(),
+      0,
       PendingTrace.create(tracer, DDId.ONE),
       tracer,
       [:])
