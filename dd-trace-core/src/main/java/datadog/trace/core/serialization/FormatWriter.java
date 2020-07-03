@@ -15,6 +15,7 @@ import static datadog.trace.core.StringTables.TYPE;
 
 import datadog.trace.api.DDId;
 import datadog.trace.core.DDSpan;
+import datadog.trace.core.DDSpanContext;
 import datadog.trace.core.StringTables;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -95,18 +96,24 @@ public abstract class FormatWriter<DEST> {
 
   public void writeMeta(final DDSpan span, final DEST destination) throws IOException {
     writeKey(META, destination);
-    Map<String, String> baggage = span.context().getBaggageItems();
-    Map<String, Object> tags = span.context().getTags();
-    writeMapHeader(baggage.size() + tags.size(), destination);
-    for (Map.Entry<String, String> entry : baggage.entrySet()) {
-      // tags and baggage may intersect, but tags take priority
-      if (!tags.containsKey(entry.getKey())) {
-        writeTag(stringToBytes(entry.getKey()), entry.getValue(), destination);
-      }
-    }
-    for (Map.Entry<String, Object> entry : tags.entrySet()) {
-      writeObjectAsString(stringToBytes(entry.getKey()), entry.getValue(), destination);
-    }
+    span.context()
+        .processTagsAndBaggage(
+            new DDSpanContext.TagsAndBaggageConsumer<IOException>() {
+              @Override
+              public void accept(Map<String, Object> tags, Map<String, String> baggage)
+                  throws IOException {
+                writeMapHeader(baggage.size() + tags.size(), destination);
+                for (Map.Entry<String, String> entry : baggage.entrySet()) {
+                  // tags and baggage may intersect, but tags take priority
+                  if (!tags.containsKey(entry.getKey())) {
+                    writeTag(stringToBytes(entry.getKey()), entry.getValue(), destination);
+                  }
+                }
+                for (Map.Entry<String, Object> entry : tags.entrySet()) {
+                  writeObjectAsString(stringToBytes(entry.getKey()), entry.getValue(), destination);
+                }
+              }
+            });
     writeMapFooter(destination);
   }
 
