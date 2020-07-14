@@ -26,6 +26,7 @@ import java.util.Map;
 
 public final class TraceMapperV0_4 implements Mapper<List<DDSpan>> {
   private final byte[] numberByteArray = new byte[20]; // this is max long digits and sign
+
   @Override
   public void map(List<DDSpan> trace, Writable writable) {
     writable.startArray(trace.size());
@@ -92,5 +93,4 @@ public final class TraceMapperV0_4 implements Mapper<List<DDSpan>> {
       }
     }
   }
-
 }

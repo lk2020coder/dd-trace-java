@@ -8,16 +8,16 @@ import datadog.common.exec.CommonTaskExecutor;
 import datadog.trace.common.writer.unixdomainsockets.UnixDomainSocketFactory;
 import datadog.trace.core.DDSpan;
 import datadog.trace.core.DDTraceCoreInfo;
+import datadog.trace.core.serialization.msgpack.Mapper;
 import java.io.File;
 import java.io.IOException;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import datadog.trace.core.serialization.msgpack.Mapper;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.ConnectionSpec;
 import okhttp3.Dispatcher;
@@ -39,10 +39,8 @@ public class DDAgentApi {
   private static final String DATADOG_META_TRACER_VERSION = "Datadog-Meta-Tracer-Version";
   private static final String DATADOG_CONTAINER_ID = "Datadog-Container-ID";
   private static final String X_DATADOG_TRACE_COUNT = "X-Datadog-Trace-Count";
-
-  private static final String TRACES_ENDPOINT_V3 = "v0.3/traces";
-  private static final String TRACES_ENDPOINT_V4 = "v0.4/traces";
-  private static final String TRACES_ENDPOINT_V5 = "v0.5/traces";
+  private static final String[] ENDPOINTS =
+      new String[] {"v0.5/traces", "v0.4/traces", "v0.3/traces"};
   private static final long NANOSECONDS_BETWEEN_ERROR_LOG = TimeUnit.MINUTES.toNanos(5);
   private static final String WILL_NOT_LOG_FOR_MESSAGE = "(Will not log errors for 5 minutes)";
 
@@ -71,6 +69,7 @@ public class DDAgentApi {
   private final long timeoutMillis;
   private OkHttpClient httpClient;
   private HttpUrl tracesUrl;
+  private boolean agentRunning = false;
 
   public DDAgentApi(
       final String host,
@@ -91,7 +90,7 @@ public class DDAgentApi {
 
   Mapper<List<DDSpan>> selectTraceMapper() {
     String endpoint = detectEndpointAndBuildClient();
-    if (TRACES_ENDPOINT_V5.equals(endpoint)) {
+    if ("v0.5/traces".equals(endpoint)) {
       return new TraceMapperV0_5();
     }
     return new TraceMapperV0_4();
@@ -103,7 +102,7 @@ public class DDAgentApi {
       detectEndpointAndBuildClient();
       if (null == httpClient) {
         log.error("No datadog agent detected");
-        return Response.failed(503);
+        return Response.failed(agentRunning ? 404 : 503);
       }
     }
     final int sizeInBytes = buffer.limit() - buffer.position();
@@ -229,8 +228,7 @@ public class DDAgentApi {
       final int representativeCount,
       final int sizeInBytes,
       final String prefix) {
-    int size = sizeInBytes;
-    String sizeString = size > 1024 ? (size / 1024) + "KB" : size + "B";
+    String sizeString = sizeInBytes > 1024 ? (sizeInBytes / 1024) + "KB" : sizeInBytes + "B";
     return prefix
         + " while sending "
         + traceCount
@@ -254,25 +252,38 @@ public class DDAgentApi {
   // empty array - see messagepack spec
   private static final byte[] EMPTY_LIST = new byte[] {(byte) 0x90};
 
-  private static boolean endpointAvailable(
+  private static OkHttpClient buildClientIfAvailable(
       final HttpUrl url,
       final String unixDomainSocketPath,
       final long timeoutMillis,
       final boolean retry) {
+    final OkHttpClient client = buildHttpClient(unixDomainSocketPath, timeoutMillis);
     try {
-      final OkHttpClient client = buildHttpClient(unixDomainSocketPath, timeoutMillis);
-      final RequestBody body = RequestBody.create(MSGPACK, EMPTY_LIST);
-      final Request request = prepareRequest(url).put(body).build();
-
-      try (final okhttp3.Response response = client.newCall(request).execute()) {
-        return response.code() == 200;
-      }
+      return validateClient(client, url);
     } catch (final IOException e) {
       if (retry) {
-        return endpointAvailable(url, unixDomainSocketPath, timeoutMillis, false);
+        try {
+          return validateClient(client, url);
+        } catch (IOException ignored) {
+          log.debug("No connectivity to {}: {}", url, ignored.getMessage());
+        }
       }
     }
-    return false;
+    return null;
+  }
+
+  private static OkHttpClient validateClient(OkHttpClient client, HttpUrl url) throws IOException {
+    final RequestBody body = RequestBody.create(MSGPACK, EMPTY_LIST);
+    final Request request = prepareRequest(url).put(body).build();
+    try (final okhttp3.Response response = client.newCall(request).execute()) {
+      if (response.code() == 200) {
+        log.debug("connectivity to {} validated", url);
+        return client;
+      } else {
+        log.debug("connectivity to {} not validated, response code={}", url, response.code());
+      }
+    }
+    return null;
   }
 
   private static OkHttpClient buildHttpClient(
@@ -322,24 +333,36 @@ public class DDAgentApi {
   }
 
   String detectEndpointAndBuildClient() {
-    String selectedEndpoint = null;
     if (httpClient == null) {
-      for (String candidate : new String[] { TRACES_ENDPOINT_V5, TRACES_ENDPOINT_V4, TRACES_ENDPOINT_V3}) {
-        final HttpUrl url = getUrl(host, port, candidate);
-        if (endpointAvailable(url, unixDomainSocketPath, timeoutMillis, true)) {
-          tracesUrl = url;
-          selectedEndpoint = candidate;
-        } else {
-          log.debug("API {} endpoints not available. Downgrading", candidate);
+      this.agentRunning = isAgentRunning();
+      if (agentRunning) {
+        for (String candidate : ENDPOINTS) {
+          final HttpUrl url = getUrl(host, port, candidate);
+          this.httpClient = buildClientIfAvailable(url, unixDomainSocketPath, timeoutMillis, true);
+          if (null != httpClient) {
+            tracesUrl = url;
+            log.debug("connected to agent {}", candidate);
+            return candidate;
+          } else {
+            log.debug("API {} endpoints not available. Downgrading", candidate);
+          }
         }
-      }
-      if (null == tracesUrl) {
-        log.error("no compatible agent detected");
+        if (null == tracesUrl) {
+          log.error("no compatible agent detected");
+        }
       } else {
-        httpClient = buildHttpClient(unixDomainSocketPath, timeoutMillis);
+        log.warn("No connectivity to datadog agent");
       }
     }
-    return selectedEndpoint;
+    return null;
+  }
+
+  private boolean isAgentRunning() {
+    try (Socket s = new Socket(host, port)) {
+      return true;
+    } catch (IOException ex) {
+      return false;
+    }
   }
 
   /**

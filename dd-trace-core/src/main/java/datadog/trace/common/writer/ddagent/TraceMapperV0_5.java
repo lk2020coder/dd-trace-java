@@ -9,13 +9,13 @@ import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.core.DDSpan;
 import datadog.trace.core.serialization.msgpack.Mapper;
 import datadog.trace.core.serialization.msgpack.Writable;
-
 import java.util.List;
 import java.util.Map;
 
 public final class TraceMapperV0_5 implements Mapper<List<DDSpan>> {
 
   private final byte[] numberByteArray = new byte[20]; // this is max long digits and sign
+
   @Override
   public void map(List<DDSpan> trace, Writable writable) {
     writable.startArray(trace.size());

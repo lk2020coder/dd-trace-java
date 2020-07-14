@@ -6,6 +6,7 @@ import datadog.trace.common.sampling.RateByServiceSampler
 import datadog.trace.common.writer.ddagent.DDAgentApi
 import datadog.trace.common.writer.ddagent.DDAgentResponseListener
 import datadog.trace.common.writer.ddagent.TraceMapperV0_4
+import datadog.trace.common.writer.ddagent.TraceMapperV0_5
 import datadog.trace.core.DDSpan
 import datadog.trace.core.DDSpanContext
 import datadog.trace.core.SpanFactory
@@ -25,11 +26,10 @@ import static datadog.trace.agent.test.server.http.TestHttpServer.httpServer
 class DDAgentApiTest extends DDSpecification {
   static mapper = new ObjectMapper(new MessagePackFactory())
 
-  def "sending an empty list of traces returns no errors"() {
-    setup:
-    def agent = httpServer {
+  def newAgent(String latestVersion) {
+    httpServer {
       handlers {
-        put("v0.4/traces") {
+        put(latestVersion) {
           if (request.contentType != "application/msgpack") {
             response.status(400).send("wrong type: $request.contentType")
           } else if (request.contentLength <= 0) {
@@ -40,6 +40,11 @@ class DDAgentApiTest extends DDSpecification {
         }
       }
     }
+  }
+
+  def "sending an empty list of traces returns no errors"() {
+    setup:
+    def agent = newAgent("v0.4/traces")
     def client = new DDAgentApi("localhost", agent.address.port, null, 1000)
     def request = prepareTraces([])
 
@@ -51,6 +56,25 @@ class DDAgentApiTest extends DDSpecification {
 
     cleanup:
     agent.close()
+  }
+
+  def "get right mapper for latest endpoint"() {
+    setup:
+    def agent = newAgent(version)
+    def client = new DDAgentApi("localhost", agent.address.port, null, 1000)
+    def mapper = client.selectTraceMapper()
+    expect:
+    mapper.getClass().isAssignableFrom(expected)
+    agent.getLastRequest().path == "/" + version
+
+    cleanup:
+    agent.close()
+
+    where:
+    version          |   expected
+    "v0.5/traces"    |   TraceMapperV0_5
+    "v0.4/traces"    |   TraceMapperV0_4
+    "v0.3/traces"    |   TraceMapperV0_4
   }
 
   def "non-200 response"() {

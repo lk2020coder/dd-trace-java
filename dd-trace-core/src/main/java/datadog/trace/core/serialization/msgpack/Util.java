@@ -30,7 +30,8 @@ public class Util {
 
   private final byte[] numberByteArray = new byte[20]; // this is max long digits and sign
 
-  public static void writeLongAsString(final long value, final Writable destination, byte[] numberByteArray) {
+  public static void writeLongAsString(
+      final long value, final Writable destination, byte[] numberByteArray) {
     int pos = 20; // start from the end
     long l = value;
     boolean negative = (l < 0);
