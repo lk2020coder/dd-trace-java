@@ -7,7 +7,7 @@ import datadog.trace.api.DDTags
 import datadog.trace.api.sampling.PrioritySampling
 import datadog.trace.common.writer.ListWriter
 import datadog.trace.common.writer.LoggingWriter
-import datadog.trace.common.writer.ddagent.TraceMapper
+import datadog.trace.common.writer.ddagent.TraceMapperV0_4
 import datadog.trace.core.serialization.msgpack.ByteBufferConsumer
 import datadog.trace.core.serialization.msgpack.Packer
 import datadog.trace.util.test.DDSpecification
@@ -108,7 +108,7 @@ class DDSpanSerializationTest extends DDSpecification {
     def buffer = ByteBuffer.allocate(1024)
     CaptureBuffer capture = new CaptureBuffer()
     def packer = new Packer(capture, buffer)
-    packer.format(Collections.singletonList(span), new TraceMapper())
+    packer.format(Collections.singletonList(span), new TraceMapperV0_4())
     packer.flush()
     def unpacker = MessagePack.newDefaultUnpacker(new ArrayBufferInput(capture.bytes))
     int traceCount = unpacker.unpackArrayHeader()

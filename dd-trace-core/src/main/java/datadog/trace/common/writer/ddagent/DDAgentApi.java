@@ -6,6 +6,7 @@ import com.squareup.moshi.Types;
 import datadog.common.container.ContainerInfo;
 import datadog.common.exec.CommonTaskExecutor;
 import datadog.trace.common.writer.unixdomainsockets.UnixDomainSocketFactory;
+import datadog.trace.core.DDSpan;
 import datadog.trace.core.DDTraceCoreInfo;
 import java.io.File;
 import java.io.IOException;
@@ -15,6 +16,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import datadog.trace.core.serialization.msgpack.Mapper;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.ConnectionSpec;
 import okhttp3.Dispatcher;
@@ -39,6 +42,7 @@ public class DDAgentApi {
 
   private static final String TRACES_ENDPOINT_V3 = "v0.3/traces";
   private static final String TRACES_ENDPOINT_V4 = "v0.4/traces";
+  private static final String TRACES_ENDPOINT_V5 = "v0.5/traces";
   private static final long NANOSECONDS_BETWEEN_ERROR_LOG = TimeUnit.MINUTES.toNanos(5);
   private static final String WILL_NOT_LOG_FOR_MESSAGE = "(Will not log errors for 5 minutes)";
 
@@ -85,10 +89,22 @@ public class DDAgentApi {
     }
   }
 
+  Mapper<List<DDSpan>> selectTraceMapper() {
+    String endpoint = detectEndpointAndBuildClient();
+    if (TRACES_ENDPOINT_V5.equals(endpoint)) {
+      return new TraceMapperV0_5();
+    }
+    return new TraceMapperV0_4();
+  }
+
   Response sendSerializedTraces(
       final int representativeCount, final int traceCount, final ByteBuffer buffer) {
-    if (httpClient == null) {
+    if (null == httpClient) {
       detectEndpointAndBuildClient();
+      if (null == httpClient) {
+        log.error("No datadog agent detected");
+        return Response.failed(503);
+      }
     }
     final int sizeInBytes = buffer.limit() - buffer.position();
 
@@ -305,17 +321,25 @@ public class DDAgentApi {
     }
   }
 
-  void detectEndpointAndBuildClient() {
+  String detectEndpointAndBuildClient() {
+    String selectedEndpoint = null;
     if (httpClient == null) {
-      final HttpUrl v4Url = getUrl(host, port, TRACES_ENDPOINT_V4);
-      if (endpointAvailable(v4Url, unixDomainSocketPath, timeoutMillis, true)) {
-        tracesUrl = v4Url;
-      } else {
-        log.debug("API v0.4 endpoints not available. Downgrading to v0.3");
-        tracesUrl = getUrl(host, port, TRACES_ENDPOINT_V3);
+      for (String candidate : new String[] { TRACES_ENDPOINT_V5, TRACES_ENDPOINT_V4, TRACES_ENDPOINT_V3}) {
+        final HttpUrl url = getUrl(host, port, candidate);
+        if (endpointAvailable(url, unixDomainSocketPath, timeoutMillis, true)) {
+          tracesUrl = url;
+          selectedEndpoint = candidate;
+        } else {
+          log.debug("API {} endpoints not available. Downgrading", candidate);
+        }
       }
-      httpClient = buildHttpClient(unixDomainSocketPath, timeoutMillis);
+      if (null == tracesUrl) {
+        log.error("no compatible agent detected");
+      } else {
+        httpClient = buildHttpClient(unixDomainSocketPath, timeoutMillis);
+      }
     }
+    return selectedEndpoint;
   }
 
   /**

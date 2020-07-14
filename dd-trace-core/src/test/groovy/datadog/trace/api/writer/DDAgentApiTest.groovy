@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import datadog.trace.common.sampling.RateByServiceSampler
 import datadog.trace.common.writer.ddagent.DDAgentApi
 import datadog.trace.common.writer.ddagent.DDAgentResponseListener
-import datadog.trace.common.writer.ddagent.TraceMapper
+import datadog.trace.common.writer.ddagent.TraceMapperV0_4
 import datadog.trace.core.DDSpan
 import datadog.trace.core.DDSpanContext
 import datadog.trace.core.SpanFactory
@@ -291,7 +291,7 @@ class DDAgentApiTest extends DDSpecification {
     ByteBuffer buffer = ByteBuffer.allocate(1 << 20)
     Traces tracesToSend = new Traces()
     def packer = new Packer(tracesToSend, buffer)
-    def traceMapper = new TraceMapper()
+    def traceMapper = new TraceMapperV0_4()
     for (trace in traces) {
       packer.format(trace, traceMapper)
     }

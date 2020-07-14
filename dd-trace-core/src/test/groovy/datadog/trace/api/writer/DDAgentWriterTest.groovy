@@ -6,7 +6,7 @@ import datadog.trace.api.sampling.PrioritySampling
 import datadog.trace.common.writer.DDAgentWriter
 import datadog.trace.common.writer.ddagent.DDAgentApi
 import datadog.trace.common.writer.ddagent.Monitor
-import datadog.trace.common.writer.ddagent.TraceMapper
+import datadog.trace.common.writer.ddagent.TraceMapperV0_4
 import datadog.trace.common.writer.ddagent.TraceProcessingDisruptor
 import datadog.trace.core.CoreTracer
 import datadog.trace.core.DDSpan
@@ -627,7 +627,7 @@ class DDAgentWriterTest extends DDSpecification {
         size.set(buffy.limit() - buffy.position() - 1)
       }
     }, buffer)
-    packer.format(trace, new TraceMapper())
+    packer.format(trace, new TraceMapperV0_4())
     packer.flush()
     return size.get()
   }

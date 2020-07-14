@@ -13,6 +13,7 @@ import datadog.trace.common.writer.DDAgentWriter;
 import datadog.trace.core.DDSpan;
 import datadog.trace.core.processor.TraceProcessor;
 import datadog.trace.core.serialization.msgpack.ByteBufferConsumer;
+import datadog.trace.core.serialization.msgpack.Mapper;
 import datadog.trace.core.serialization.msgpack.Packer;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -122,7 +123,7 @@ public class TraceProcessingDisruptor implements AutoCloseable {
     private final DDAgentApi api;
     private int representativeCount = 0;
     private long nextFlushMillis;
-    private final TraceMapper traceMapper = new TraceMapper();
+    private final Mapper<List<DDSpan>> traceMapper;
 
     private Packer packer;
 
@@ -142,6 +143,7 @@ public class TraceProcessingDisruptor implements AutoCloseable {
       } else {
         this.flushIntervalMillis = Long.MAX_VALUE;
       }
+      this.traceMapper = api.selectTraceMapper();
     }
 
     @Override
