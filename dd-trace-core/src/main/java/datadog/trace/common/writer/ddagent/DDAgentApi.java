@@ -69,6 +69,7 @@ public class DDAgentApi {
   private final long timeoutMillis;
   private OkHttpClient httpClient;
   private HttpUrl tracesUrl;
+  private String detectedVersion = null;
   private boolean agentRunning = false;
 
   public DDAgentApi(
@@ -98,14 +99,15 @@ public class DDAgentApi {
 
   Response sendSerializedTraces(
       final int representativeCount, final int traceCount, final ByteBuffer buffer) {
+    final int sizeInBytes = buffer.limit() - buffer.position();
     if (null == httpClient) {
       detectEndpointAndBuildClient();
       if (null == httpClient) {
         log.error("No datadog agent detected");
+        countAndLogFailedSend(traceCount, representativeCount, sizeInBytes, null, null);
         return Response.failed(agentRunning ? 404 : 503);
       }
     }
-    final int sizeInBytes = buffer.limit() - buffer.position();
 
     try {
       final Request request =
@@ -253,20 +255,15 @@ public class DDAgentApi {
   private static final byte[] EMPTY_LIST = new byte[] {(byte) 0x90};
 
   private static OkHttpClient buildClientIfAvailable(
-      final HttpUrl url,
-      final String unixDomainSocketPath,
-      final long timeoutMillis,
-      final boolean retry) {
+      final HttpUrl url, final String unixDomainSocketPath, final long timeoutMillis) {
     final OkHttpClient client = buildHttpClient(unixDomainSocketPath, timeoutMillis);
     try {
       return validateClient(client, url);
     } catch (final IOException e) {
-      if (retry) {
-        try {
-          return validateClient(client, url);
-        } catch (IOException ignored) {
-          log.debug("No connectivity to {}: {}", url, ignored.getMessage());
-        }
+      try {
+        return validateClient(client, url);
+      } catch (IOException ignored) {
+        log.debug("No connectivity to {}: {}", url, ignored.getMessage());
       }
     }
     return null;
@@ -335,26 +332,27 @@ public class DDAgentApi {
   String detectEndpointAndBuildClient() {
     if (httpClient == null) {
       this.agentRunning = isAgentRunning();
-      if (agentRunning) {
-        for (String candidate : ENDPOINTS) {
-          final HttpUrl url = getUrl(host, port, candidate);
-          this.httpClient = buildClientIfAvailable(url, unixDomainSocketPath, timeoutMillis, true);
-          if (null != httpClient) {
-            tracesUrl = url;
-            log.debug("connected to agent {}", candidate);
-            return candidate;
-          } else {
-            log.debug("API {} endpoints not available. Downgrading", candidate);
-          }
+      // TODO should check agentRunning, but CoreTracerTest depends on being
+      //  able to detect an endpoint without an open socket...
+      for (String candidate : ENDPOINTS) {
+        final HttpUrl url = getUrl(host, port, candidate);
+        this.httpClient = buildClientIfAvailable(url, unixDomainSocketPath, timeoutMillis);
+        if (null != httpClient) {
+          detectedVersion = candidate;
+          tracesUrl = url;
+          log.debug("connected to agent {}", candidate);
+          return candidate;
+        } else {
+          log.debug("API {} endpoints not available. Downgrading", candidate);
         }
-        if (null == tracesUrl) {
-          log.error("no compatible agent detected");
-        }
-      } else {
-        log.warn("No connectivity to datadog agent");
       }
+      if (null == tracesUrl) {
+        log.error("no compatible agent detected");
+      }
+    } else {
+      log.warn("No connectivity to datadog agent");
     }
-    return null;
+    return detectedVersion;
   }
 
   private boolean isAgentRunning() {

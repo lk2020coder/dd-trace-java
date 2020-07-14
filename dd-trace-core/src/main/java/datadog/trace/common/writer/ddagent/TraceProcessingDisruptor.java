@@ -132,7 +132,7 @@ public class TraceProcessingDisruptor implements AutoCloseable {
         final DDAgentWriter writer,
         final long flushInterval,
         final TimeUnit timeUnit,
-        DDAgentApi api) {
+        final DDAgentApi api) {
       this.monitor = monitor;
       this.writer = writer;
       this.doTimeFlush = flushInterval > 0;

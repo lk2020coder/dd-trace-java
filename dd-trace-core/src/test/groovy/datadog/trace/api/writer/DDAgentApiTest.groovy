@@ -26,7 +26,7 @@ import static datadog.trace.agent.test.server.http.TestHttpServer.httpServer
 class DDAgentApiTest extends DDSpecification {
   static mapper = new ObjectMapper(new MessagePackFactory())
 
-  def newAgent(String latestVersion) {
+  static def newAgent(String latestVersion) {
     httpServer {
       handlers {
         put(latestVersion) {
