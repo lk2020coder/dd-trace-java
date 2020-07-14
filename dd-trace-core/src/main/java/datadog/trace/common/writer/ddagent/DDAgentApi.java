@@ -290,7 +290,7 @@ public class DDAgentApi {
       builder = builder.socketFactory(new UnixDomainSocketFactory(new File(unixDomainSocketPath)));
     }
     return builder
-        .connectTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
+        .connectTimeout(1000, TimeUnit.MILLISECONDS)
         .writeTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
         .readTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
 
