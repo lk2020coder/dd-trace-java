@@ -335,11 +335,10 @@ public class DDAgentApi {
       // TODO should check agentRunning, but CoreTracerTest depends on being
       //  able to detect an endpoint without an open socket...
       for (String candidate : ENDPOINTS) {
-        final HttpUrl url = getUrl(host, port, candidate);
-        this.httpClient = buildClientIfAvailable(url, unixDomainSocketPath, timeoutMillis);
+        tracesUrl = getUrl(host, port, candidate);
+        this.httpClient = buildClientIfAvailable(tracesUrl, unixDomainSocketPath, timeoutMillis);
         if (null != httpClient) {
           detectedVersion = candidate;
-          tracesUrl = url;
           log.debug("connected to agent {}", candidate);
           return candidate;
         } else {
