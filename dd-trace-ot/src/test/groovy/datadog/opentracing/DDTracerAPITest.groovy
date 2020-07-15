@@ -10,7 +10,7 @@ import static datadog.trace.api.DDTags.LANGUAGE_TAG_KEY
 import static datadog.trace.api.DDTags.LANGUAGE_TAG_VALUE
 import static datadog.trace.api.DDTags.RUNTIME_ID_TAG
 
-class DDTracerAPITest extends DDSpecification {
+class xDDTracerAPITest extends DDSpecification {
   def "verify sampler/writer constructor"() {
     setup:
     def writer = new ListWriter()

@@ -30,6 +30,7 @@ class DDAgentApiTest extends DDSpecification {
     httpServer {
       handlers {
         put(latestVersion) {
+          System.out.println(request.getHeader("X-Datadog-Trace-Count"))
           if (request.contentType != "application/msgpack") {
             response.status(400).send("wrong type: $request.contentType")
           } else if (request.contentLength <= 0) {

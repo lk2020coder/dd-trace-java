@@ -397,10 +397,10 @@ class DDAgentWriterTest extends DDSpecification {
     writer.flush()
 
     then:
-    1 * monitor.onPublish(writer, minimalTrace)
-    1 * monitor.onSerialize(_)
+    // if we know there's no agent, we'll drop the traces before serialising them
+    // but we also know that there's nowhere to send health metrics to
+    1 * monitor.onPublish(writer, _)
     1 * monitor.onFlush(writer, false)
-    1 * monitor.onFailedSend(writer, 1, _, { response -> !response.success() && response.status() == 503 })
 
     when:
     writer.close()

@@ -11,6 +11,7 @@ import datadog.trace.core.DDTraceCoreInfo;
 import datadog.trace.core.serialization.msgpack.Mapper;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ import okio.BufferedSink;
 /** The API pointing to a DD agent */
 @Slf4j
 public class DDAgentApi {
+  private static final int CONNECT_TIMEOUT_MS = 1000;
   private static final String DATADOG_META_LANG = "Datadog-Meta-Lang";
   private static final String DATADOG_META_LANG_VERSION = "Datadog-Meta-Lang-Version";
   private static final String DATADOG_META_LANG_INTERPRETER = "Datadog-Meta-Lang-Interpreter";
@@ -39,8 +41,10 @@ public class DDAgentApi {
   private static final String DATADOG_META_TRACER_VERSION = "Datadog-Meta-Tracer-Version";
   private static final String DATADOG_CONTAINER_ID = "Datadog-Container-ID";
   private static final String X_DATADOG_TRACE_COUNT = "X-Datadog-Trace-Count";
-  private static final String[] ENDPOINTS =
-      new String[] {"v0.5/traces", "v0.4/traces", "v0.3/traces"};
+  private static final String V3_ENDPOINT = "v0.3/traces";
+  private static final String V4_ENDPOINT = "v0.4/traces";
+  private static final String V5_ENDPOINT = "v0.5/traces";
+  private static final String[] ENDPOINTS = new String[] {V5_ENDPOINT, V4_ENDPOINT, V3_ENDPOINT};
   private static final long NANOSECONDS_BETWEEN_ERROR_LOG = TimeUnit.MINUTES.toNanos(5);
   private static final String WILL_NOT_LOG_FOR_MESSAGE = "(Will not log errors for 5 minutes)";
 
@@ -91,7 +95,10 @@ public class DDAgentApi {
 
   Mapper<List<DDSpan>> selectTraceMapper() {
     String endpoint = detectEndpointAndBuildClient();
-    if ("v0.5/traces".equals(endpoint)) {
+    if (null == endpoint) {
+      return null;
+    }
+    if (V5_ENDPOINT.equals(endpoint)) {
       return new TraceMapperV0_5();
     }
     return new TraceMapperV0_4();
@@ -290,7 +297,7 @@ public class DDAgentApi {
       builder = builder.socketFactory(new UnixDomainSocketFactory(new File(unixDomainSocketPath)));
     }
     return builder
-        .connectTimeout(1000, TimeUnit.MILLISECONDS)
+        .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         .writeTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
         .readTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
 
@@ -330,6 +337,7 @@ public class DDAgentApi {
   }
 
   String detectEndpointAndBuildClient() {
+    // TODO clean this up
     if (httpClient == null) {
       this.agentRunning = isAgentRunning();
       // TODO should check agentRunning, but CoreTracerTest depends on being
@@ -351,13 +359,20 @@ public class DDAgentApi {
     } else {
       log.warn("No connectivity to datadog agent");
     }
+    if (null == detectedVersion) {
+      log.debug("Tried all of {}, no connectivity to datadog agent", ENDPOINTS);
+    }
     return detectedVersion;
   }
 
   private boolean isAgentRunning() {
-    try (Socket s = new Socket(host, port)) {
+    try (Socket socket = new Socket()) {
+      socket.setSoTimeout(CONNECT_TIMEOUT_MS);
+      socket.connect(new InetSocketAddress(host, port));
+      log.debug("Agent connectivity ({}:{})", host, port);
       return true;
     } catch (IOException ex) {
+      log.debug("No agent connectivity ({}:{})", host, port);
       return false;
     }
   }

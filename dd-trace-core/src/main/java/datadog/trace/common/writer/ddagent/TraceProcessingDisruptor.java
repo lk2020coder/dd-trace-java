@@ -148,10 +148,7 @@ public class TraceProcessingDisruptor implements AutoCloseable {
     @Override
     public void onEvent(
         final DisruptorEvent<List<DDSpan>> event, final long sequence, final boolean endOfBatch) {
-      if (null == packer) {
-        this.packer = new Packer(this, ByteBuffer.allocate(DEFAULT_BUFFER_SIZE));
-        this.traceMapper = api.selectTraceMapper();
-      }
+      postConstruct();
       try {
         if (representativeCount > 0) {
           // publish an incomplete batch if
@@ -185,7 +182,11 @@ public class TraceProcessingDisruptor implements AutoCloseable {
       // there are alternative approaches to avoid blocking here, such as
       // introducing an unbound queue and another thread to do the IO
       // however, we can't block the application threads from here.
-      packer.format(processor.onTraceComplete(trace), traceMapper);
+      if (null != traceMapper) {
+        packer.format(processor.onTraceComplete(trace), traceMapper);
+      } else { // if the mapper is null, then there's no agent running, so we should drop
+        log.debug("dropping {} traces because no agent was detected", representativeCount);
+      }
       this.representativeCount += representativeCount;
     }
 
@@ -198,6 +199,15 @@ public class TraceProcessingDisruptor implements AutoCloseable {
     private long millisecondTime() {
       // important: nanoTime is monotonic, currentTimeMillis is not
       return NANOSECONDS.toMillis(System.nanoTime());
+    }
+
+    private void postConstruct() {
+      if (null == traceMapper) {
+        this.traceMapper = api.selectTraceMapper();
+        if (null == packer) {
+          this.packer = new Packer(this, ByteBuffer.allocate(DEFAULT_BUFFER_SIZE));
+        }
+      }
     }
 
     @Override
