@@ -123,7 +123,7 @@ public class TraceProcessingDisruptor implements AutoCloseable {
     private final DDAgentApi api;
     private int representativeCount = 0;
     private long nextFlushMillis;
-    private final Mapper<List<DDSpan>> traceMapper;
+    private Mapper<List<DDSpan>> traceMapper;
 
     private Packer packer;
 
@@ -143,14 +143,14 @@ public class TraceProcessingDisruptor implements AutoCloseable {
       } else {
         this.flushIntervalMillis = Long.MAX_VALUE;
       }
-      this.traceMapper = api.selectTraceMapper();
     }
 
     @Override
     public void onEvent(
         final DisruptorEvent<List<DDSpan>> event, final long sequence, final boolean endOfBatch) {
       if (null == packer) {
-        packer = new Packer(this, ByteBuffer.allocate(DEFAULT_BUFFER_SIZE));
+        this.packer = new Packer(this, ByteBuffer.allocate(DEFAULT_BUFFER_SIZE));
+        this.traceMapper = api.selectTraceMapper();
       }
       try {
         if (representativeCount > 0) {
