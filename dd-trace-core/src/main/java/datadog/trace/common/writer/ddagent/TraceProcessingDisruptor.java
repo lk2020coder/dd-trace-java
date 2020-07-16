@@ -148,7 +148,11 @@ public class TraceProcessingDisruptor implements AutoCloseable {
     @Override
     public void onEvent(
         final DisruptorEvent<List<DDSpan>> event, final long sequence, final boolean endOfBatch) {
-      postConstruct();
+      if (event.data != null) {
+        // this will trigger logging and it can cause problems if this happens too soon
+        // waiting for a trace to have been produced helps to avoid this
+        postConstruct();
+      }
       try {
         if (representativeCount > 0) {
           // publish an incomplete batch if
@@ -163,7 +167,9 @@ public class TraceProcessingDisruptor implements AutoCloseable {
           serialize(event.data, event.representativeCount);
         }
         if (null != event.flushLatch) {
-          packer.flush();
+          if (null != packer) {
+            packer.flush();
+          }
           event.flushLatch.countDown();
         }
       } catch (final Throwable e) {

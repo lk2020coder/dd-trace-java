@@ -63,7 +63,6 @@ class DDAgentWriterTest extends DDSpecification {
     writer.flush()
 
     then:
-    1 * api.selectTraceMapper()
     0 * _
 
     where:
@@ -223,7 +222,7 @@ class DDAgentWriterTest extends DDSpecification {
     agentVersion << ["v0.3/traces", "v0.4/traces", "v0.5/traces"]
   }
 
-  def "check that are no interactions after close"() {
+  def "check that there are no interactions after close"() {
     setup:
     def api = apiWithVersion(agentVersion)
     def writer = DDAgentWriter.builder()
@@ -240,8 +239,6 @@ class DDAgentWriterTest extends DDSpecification {
     then:
 //    2 * monitor.onFlush(_, false)
     // this will be checked during flushing
-    1 * api.detectEndpointAndBuildClient() >> agentVersion
-    1 * api.selectTraceMapper()  >> { callRealMethod() }
     1 * monitor.onFailedPublish(_, _)
     1 * monitor.onFlush(_, _)
     1 * monitor.onShutdown(_, _)
