@@ -119,7 +119,7 @@ public class TraceProcessingDisruptor implements AutoCloseable {
     private final DDAgentApi api;
     private int representativeCount = 0;
     private long nextFlushMillis;
-    private Mapper<List<DDSpan>> traceMapper;
+    private TraceMapper traceMapper;
 
     private Packer packer;
 

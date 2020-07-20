@@ -12,7 +12,7 @@ import datadog.trace.core.serialization.msgpack.Writable;
 import java.util.List;
 import java.util.Map;
 
-public final class TraceMapperV0_5 implements Mapper<List<DDSpan>> {
+public final class TraceMapperV0_5 implements TraceMapper {
 
   private final byte[] numberByteArray = new byte[20]; // this is max long digits and sign
 

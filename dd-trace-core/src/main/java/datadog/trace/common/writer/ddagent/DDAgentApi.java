@@ -6,9 +6,17 @@ import com.squareup.moshi.Types;
 import datadog.common.container.ContainerInfo;
 import datadog.common.exec.CommonTaskExecutor;
 import datadog.trace.common.writer.unixdomainsockets.UnixDomainSocketFactory;
-import datadog.trace.core.DDSpan;
 import datadog.trace.core.DDTraceCoreInfo;
-import datadog.trace.core.serialization.msgpack.Mapper;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.ConnectionSpec;
+import okhttp3.Dispatcher;
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okio.BufferedSink;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -19,15 +27,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import lombok.extern.slf4j.Slf4j;
-import okhttp3.ConnectionSpec;
-import okhttp3.Dispatcher;
-import okhttp3.HttpUrl;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okio.BufferedSink;
 
 /** The API pointing to a DD agent */
 @Slf4j
@@ -93,7 +92,7 @@ public class DDAgentApi {
     }
   }
 
-  Mapper<List<DDSpan>> selectTraceMapper() {
+  TraceMapper selectTraceMapper() {
     String endpoint = detectEndpointAndBuildClient();
     if (null == endpoint) {
       return null;
