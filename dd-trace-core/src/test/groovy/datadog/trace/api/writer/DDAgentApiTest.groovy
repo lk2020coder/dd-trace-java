@@ -106,17 +106,17 @@ class DDAgentApiTest extends DDSpecification {
     agent.close()
   }
 
-  def "content is sent as MSGPACK v0.4"() {
+  def "content is sent as MSGPACK"() {
     setup:
     def agent = httpServer {
       handlers {
-        put("v0.4/traces") {
+        put(agentVersion) {
           response.send()
         }
       }
     }
     def client = new DDAgentApi("localhost", agent.address.port, null, 1000)
-    def request = prepareTraces("v0.4/traces", traces)
+    def request = prepareTraces(agentVersion, traces)
 
     expect:
     client.sendSerializedTraces(request.traceCount, request.representativeCount, null, request.buffer).success()
@@ -125,7 +125,7 @@ class DDAgentApiTest extends DDSpecification {
     agent.lastRequest.headers.get("Datadog-Meta-Lang-Version") == System.getProperty("java.version", "unknown")
     agent.lastRequest.headers.get("Datadog-Meta-Tracer-Version") == "Stubbed-Test-Version"
     agent.lastRequest.headers.get("X-Datadog-Trace-Count") == "${traces.size()}"
-    convertList("v0.4/traces", agent.lastRequest.body) == expectedRequestBody
+    convertList(agentVersion, agent.lastRequest.body) == expectedRequestBody
 
     cleanup:
     agent.close()
@@ -175,6 +175,7 @@ class DDAgentApiTest extends DDSpecification {
         it.@durationNano.set(10)
       }
     }
+    agentVersion << ["v0.3/traces", "v0.4/traces", "v0.4/traces"]
   }
 
   def "Api ResponseListeners see 200 responses"() {
@@ -311,7 +312,38 @@ class DDAgentApiTest extends DDSpecification {
   }
 
   static List<List<TreeMap<String, Object>>> convertList(String agentVersion, byte[] bytes) {
+    if (agentVersion.equals("v0.5/traces")) {
+      return convertListV5(bytes)
+    }
     return mapper.readValue(bytes, new TypeReference<List<List<TreeMap<String, Object>>>>() {})
+  }
+
+  static List<List<TreeMap<String, Object>>> convertListV5(byte[] bytes) {
+    List<List<List<Object>>> traces = mapper.readValue(bytes, new TypeReference<List<List<List<Object>>>>() {})
+    List<List<TreeMap<String, Object>>> maps = new ArrayList<>(traces.size())
+    for (List<List<Object>> trace : traces) {
+      List<TreeMap<String, Object>> mapTrace = new ArrayList<>()
+      for (List<Object> span : trace) {
+        TreeMap<String, Object> map = new TreeMap<>()
+        if (!span.isEmpty()) {
+          map.put("service", span.get(0))
+          map.put("name", span.get(1))
+          map.put("resource", span.get(2))
+          map.put("trace_id", span.get(3))
+          map.put("span_id", span.get(4))
+          map.put("parent_id", span.get(5))
+          map.put("start", span.get(6))
+          map.put("duration", span.get(7))
+          map.put("error", span.get(8))
+          map.put("meta", span.get(9))
+          map.put("metrics", span.get(10))
+          map.put("type", span.get(11))
+        }
+        mapTrace.add(map)
+      }
+      maps.add(mapTrace)
+    }
+    return maps
   }
 
   static class Traces implements ByteBufferConsumer {

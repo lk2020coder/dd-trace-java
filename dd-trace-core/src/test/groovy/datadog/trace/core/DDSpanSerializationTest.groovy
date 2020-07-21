@@ -154,25 +154,18 @@ class DDSpanSerializationTest extends DDSpecification {
     }
     def unpacker = MessagePack.newDefaultUnpacker(new ArrayBufferInput(capture.bytes))
     int traceCount = unpacker.unpackArrayHeader()
-    long traceId = unpacker.unpackLong()
-    traceId == value
-    int baggageCount = unpacker.unpackMapHeader()
-    for (int i = 0; i < baggageCount; ++i) {
-      String k = dictionary[unpacker.unpackInt()]
-      k != null
-      String v = dictionary[unpacker.unpackInt()]
-      v != null
-    }
+
     int spanCount = unpacker.unpackArrayHeader()
     int size = unpacker.unpackArrayHeader()
 
     expect:
     traceCount == 1
     spanCount == 1
-    size == 11
+    size == 12
     for (int i = 0; i < size; i++) {
       switch (i) {
         case 3:
+        case 4:
           MessageFormat next = unpacker.nextFormat
           assert next.valueType == ValueType.INTEGER
           if (next == MessageFormat.UINT64) {

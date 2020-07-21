@@ -36,15 +36,6 @@ class TraceMapperTest extends DDSpecification {
     }
     MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(sink.captured)
     1 == unpacker.unpackArrayHeader()
-    long traceId = unpacker.unpackLong()
-    traceId == 1
-    int baggageSize = unpacker.unpackMapHeader()
-    for (int i = 0; i < baggageSize; ++i) {
-      String key = dictionary[unpacker.unpackInt()]
-      key != null
-      String value = dictionary[unpacker.unpackInt()]
-      value != null
-    }
     int spanCount = unpacker.unpackArrayHeader()
     spans.size() == spanCount
     for (int i = 0; i < spanCount; ++i) {
@@ -54,7 +45,10 @@ class TraceMapperTest extends DDSpecification {
       serviceName == "my-service"
       String operationName = dictionary[unpacker.unpackInt()]
       operationName == null
-      dictionary[unpacker.unpackInt()]
+      String resourceName = dictionary[unpacker.unpackInt()]
+      resourceName != null
+      long traceId = unpacker.unpackLong()
+      traceId == 1
       unpacker.unpackLong()
       unpacker.unpackLong()
       unpacker.unpackLong()

@@ -57,19 +57,9 @@ public final class TraceMapperV0_5 implements TraceMapper {
       // faster than the message content
       throw DICTIONARY_FULL;
     }
-    if (!trace.isEmpty()) {
-      DDSpan span = trace.get(0);
-      writable.writeLong(span.getTraceId().toLong());
-      Map<String, String> baggage = span.context().getBaggageItems();
-      writable.startMap(baggage.size());
-      for (Map.Entry<String, String> entry : baggage.entrySet()) {
-        writable.writeInt(getDictionaryCode(entry.getKey()));
-        writable.writeInt(getDictionaryCode(entry.getValue()));
-      }
-    }
     writable.startArray(trace.size());
     for (DDSpan span : trace) {
-      writable.startArray(11);
+      writable.startArray(12);
       /* 1  */
       writable.writeInt(getDictionaryCode(span.getServiceName()));
       /* 2  */
@@ -77,29 +67,38 @@ public final class TraceMapperV0_5 implements TraceMapper {
       /* 3  */
       writable.writeInt(getDictionaryCode(span.getResourceName()));
       /* 4  */
-      writable.writeLong(span.getSpanId().toLong());
+      writable.writeLong(span.getTraceId().toLong());
       /* 5  */
-      writable.writeLong(span.getParentId().toLong());
+      writable.writeLong(span.getSpanId().toLong());
       /* 6  */
-      writable.writeLong(span.getStartTime());
+      writable.writeLong(span.getParentId().toLong());
       /* 7  */
-      writable.writeLong(span.getDurationNano());
+      writable.writeLong(span.getStartTime());
       /* 8  */
-      writable.writeInt(span.getError());
+      writable.writeLong(span.getDurationNano());
       /* 9  */
+      writable.writeInt(span.getError());
+      /* 10  */
       Map<String, Object> tags = span.context().getTags();
-      writable.startMap(tags.size());
+      Map<String, String> baggage = span.context().getBaggageItems();
+      writable.startMap(baggage.size() + tags.size());
+      for (Map.Entry<String, String> entry : baggage.entrySet()) {
+        if (!tags.containsKey(entry.getKey())) {
+          writable.writeInt(getDictionaryCode(entry.getKey()));
+          writable.writeInt(getDictionaryCode(entry.getValue()));
+        }
+      }
       for (Map.Entry<String, Object> entry : tags.entrySet()) {
         writable.writeInt(getDictionaryCode(entry.getKey()));
         writable.writeInt(getDictionaryCode(entry.getValue()));
       }
-      /* 10  */
+      /* 11  */
       writable.startMap(span.getMetrics().size());
       for (Map.Entry<String, Number> entry : span.getMetrics().entrySet()) {
         writable.writeInt(getDictionaryCode(entry.getKey()));
         writable.writeObject(entry.getValue(), NO_CACHING);
       }
-      /* 11 */
+      /* 12 */
       writable.writeInt(getDictionaryCode(span.getType()));
     }
   }
