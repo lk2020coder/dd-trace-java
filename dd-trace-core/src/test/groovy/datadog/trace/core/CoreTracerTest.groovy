@@ -114,7 +114,8 @@ class CoreTracerTest extends DDSpecification {
     def tracer = CoreTracer.builder().config(new Config()).build()
     then:
     tracer.writer instanceof DDAgentWriter
-    ((DDAgentWriter) tracer.writer).api.sendSerializedTraces(0, 0, ByteBuffer.allocate(0))
+    // this test has no business reaching into the internals of another subsystem like this
+    ((DDAgentWriter) tracer.writer).api.sendSerializedTraces(0, 0, null, ByteBuffer.allocate(0))
     ((DDAgentWriter) tracer.writer).api.tracesUrl.host() == value
     ((DDAgentWriter) tracer.writer).api.tracesUrl.port() == 8126
 
@@ -130,7 +131,7 @@ class CoreTracerTest extends DDSpecification {
 
     then:
     tracer.writer instanceof DDAgentWriter
-    ((DDAgentWriter) tracer.writer).api.sendSerializedTraces(0, 0, ByteBuffer.allocate(0))
+    ((DDAgentWriter) tracer.writer).api.sendSerializedTraces(0, 0, null, ByteBuffer.allocate(0))
     ((DDAgentWriter) tracer.writer).api.tracesUrl.host() == "localhost"
     ((DDAgentWriter) tracer.writer).api.tracesUrl.port() == Integer.valueOf(value)
 
