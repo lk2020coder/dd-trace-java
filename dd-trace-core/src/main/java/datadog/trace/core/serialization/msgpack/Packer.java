@@ -175,7 +175,7 @@ public class Packer implements Writable, MessageFormatter {
     if (null == s) {
       writeNull();
     } else {
-      byte[] utf8 = encodingCache.encode(s);
+      byte[] utf8 = null == encodingCache ? null : encodingCache.encode(s);
       if (null == utf8) {
         if (s.length() < UTF8_BUFFER_SIZE) {
           utf8EncodeWithArray(s);

@@ -18,6 +18,17 @@ import java.util.Map;
 
 public final class TraceMapperV0_5 implements TraceMapper {
 
+  private static final class DictionaryFull extends BufferOverflowException {
+    @Override
+    public synchronized Throwable fillInStackTrace() {
+      return this;
+    }
+  }
+
+  private static final DictionaryFull DICTIONARY_FULL = new DictionaryFull();
+
+  // TODO probably need to modify Packer to make getting the dictionary
+  //  a bit less hacky
   private final ByteBuffer[] dictionary = new ByteBuffer[1];
   private final Packer dictionaryWriter =
       new Packer(
@@ -44,7 +55,7 @@ public final class TraceMapperV0_5 implements TraceMapper {
     if (dictionary[0] != null) {
       // signal the need for a flush because the string table filled up
       // faster than the message content
-      throw new BufferOverflowException();
+      throw DICTIONARY_FULL;
     }
     if (!trace.isEmpty()) {
       DDSpan span = trace.get(0);
@@ -118,6 +129,8 @@ public final class TraceMapperV0_5 implements TraceMapper {
   public void reset() {
     dictionaryWriter.reset();
     dictionary[0] = null;
+    // null strings are always encoded as 0 for ease of decoding,
+    // so null needs to be the first element in the dictionary
     dictionaryWriter.format(null, dictionaryMapper);
     code = 1;
     encoding.clear();
@@ -139,10 +152,13 @@ public final class TraceMapperV0_5 implements TraceMapper {
         String string = String.valueOf(data);
         byte[] utf8 = StringTables.getKeyBytesUTF8(string);
         if (null == utf8) {
-          packer.writeString(string, NO_CACHING);
-        } else {
-          packer.writeUTF8(utf8);
+          utf8 = StringTables.getTagBytesUTF8(string);
+          if (null == utf8) {
+            packer.writeString(string, NO_CACHING);
+            return;
+          }
         }
+        packer.writeUTF8(utf8);
       }
     }
   }
