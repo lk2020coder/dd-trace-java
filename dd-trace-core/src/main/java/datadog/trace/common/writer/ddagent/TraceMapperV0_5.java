@@ -1,6 +1,7 @@
 package datadog.trace.common.writer.ddagent;
 
 import static datadog.trace.core.serialization.msgpack.EncodingCachingStrategies.NO_CACHING;
+import static datadog.trace.core.serialization.msgpack.Util.writeLongAsString;
 
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.core.DDSpan;
@@ -31,11 +32,11 @@ public final class TraceMapperV0_5 implements TraceMapper {
   private final DictionaryMapper dictionaryMapper = new DictionaryMapper();
 
   private int code = 1;
-  // TODO use a primitive collection e.g. fastutil ObjectIntHashMap<CharSequence>
-  private final Map<CharSequence, Integer> encoding = new HashMap<>();
+  // TODO use a primitive collection e.g. fastutil ObjectIntHashMap
+  private final Map<Object, Integer> encoding = new HashMap<>();
 
   public TraceMapperV0_5() {
-    init();
+    reset();
   }
 
   @Override
@@ -78,11 +79,7 @@ public final class TraceMapperV0_5 implements TraceMapper {
       writable.startMap(tags.size());
       for (Map.Entry<String, Object> entry : tags.entrySet()) {
         writable.writeInt(getDictionaryCode(entry.getKey()));
-        if (entry.getValue() instanceof UTF8BytesString) {
-          writable.writeInt(getDictionaryCode((UTF8BytesString) entry.getValue()));
-        } else {
-          writable.writeInt(getDictionaryCode(String.valueOf(entry.getValue())));
-        }
+        writable.writeInt(getDictionaryCode(entry.getValue()));
       }
       /* 9  */
       writable.startMap(span.getMetrics().size());
@@ -95,7 +92,7 @@ public final class TraceMapperV0_5 implements TraceMapper {
     }
   }
 
-  private int getDictionaryCode(CharSequence value) {
+  private int getDictionaryCode(Object value) {
     if (null == value) {
       return 0;
     }
@@ -119,10 +116,6 @@ public final class TraceMapperV0_5 implements TraceMapper {
 
   @Override
   public void reset() {
-    init();
-  }
-
-  private void init() {
     dictionaryWriter.reset();
     dictionary[0] = null;
     dictionaryWriter.format(null, dictionaryMapper);
@@ -130,18 +123,23 @@ public final class TraceMapperV0_5 implements TraceMapper {
     encoding.clear();
   }
 
-  private static class DictionaryMapper implements Mapper<CharSequence> {
+  private static class DictionaryMapper implements Mapper<Object> {
+
+    private final byte[] numberByteArray = new byte[20]; // this is max long digits and sign
 
     @Override
-    public void map(CharSequence data, Writable packer) {
+    public void map(Object data, Writable packer) {
       if (null == data) {
         packer.writeNull();
       } else if (data instanceof UTF8BytesString) {
         packer.writeUTF8(((UTF8BytesString) data).getUtf8Bytes());
+      } else if (data instanceof Long || data instanceof Integer) {
+        writeLongAsString(((Number) data).longValue(), packer, numberByteArray);
       } else {
-        byte[] utf8 = StringTables.getKeyBytesUTF8(data);
+        String string = String.valueOf(data);
+        byte[] utf8 = StringTables.getKeyBytesUTF8(string);
         if (null == utf8) {
-          packer.writeString(data, NO_CACHING);
+          packer.writeString(string, NO_CACHING);
         } else {
           packer.writeUTF8(utf8);
         }
