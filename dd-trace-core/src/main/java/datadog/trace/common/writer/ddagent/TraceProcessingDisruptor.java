@@ -12,7 +12,6 @@ import datadog.common.exec.DaemonThreadFactory;
 import datadog.trace.core.DDSpan;
 import datadog.trace.core.processor.TraceProcessor;
 import datadog.trace.core.serialization.msgpack.ByteBufferConsumer;
-import datadog.trace.core.serialization.msgpack.Mapper;
 import datadog.trace.core.serialization.msgpack.Packer;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -218,7 +217,9 @@ public class TraceProcessingDisruptor implements AutoCloseable {
         final int sizeInBytes = buffer.limit() - buffer.position();
         monitor.onSerialize(sizeInBytes);
         DDAgentApi.Response response =
-            api.sendSerializedTraces(messageCount, representativeCount, buffer);
+            api.sendSerializedTraces(
+                messageCount, representativeCount, traceMapper.getDictionary(), buffer);
+        traceMapper.reset();
         if (response.success()) {
           if (log.isDebugEnabled()) {
             log.debug("Successfully sent {} traces to the API", messageCount);

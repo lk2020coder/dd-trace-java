@@ -7,16 +7,6 @@ import datadog.common.container.ContainerInfo;
 import datadog.common.exec.CommonTaskExecutor;
 import datadog.trace.common.writer.unixdomainsockets.UnixDomainSocketFactory;
 import datadog.trace.core.DDTraceCoreInfo;
-import lombok.extern.slf4j.Slf4j;
-import okhttp3.ConnectionSpec;
-import okhttp3.Dispatcher;
-import okhttp3.HttpUrl;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okio.BufferedSink;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -27,6 +17,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.ConnectionSpec;
+import okhttp3.Dispatcher;
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okio.BufferedSink;
 
 /** The API pointing to a DD agent */
 @Slf4j
@@ -104,8 +103,11 @@ public class DDAgentApi {
   }
 
   Response sendSerializedTraces(
-      final int representativeCount, final int traceCount, final ByteBuffer buffer) {
-    final int sizeInBytes = buffer.limit() - buffer.position();
+      final int representativeCount,
+      final int traceCount,
+      final ByteBuffer dictionary,
+      final ByteBuffer buffer) {
+    final int sizeInBytes = sizeInBytes(dictionary) + sizeInBytes(buffer);
     if (null == httpClient) {
       detectEndpointAndBuildClient();
       if (null == httpClient) {
@@ -119,7 +121,7 @@ public class DDAgentApi {
       final Request request =
           prepareRequest(tracesUrl)
               .addHeader(X_DATADOG_TRACE_COUNT, Integer.toString(representativeCount))
-              .put(new MsgPackRequestBody(buffer))
+              .put(new MsgPackRequestBody(dictionary, buffer, sizeInBytes))
               .build();
       this.totalTraces += representativeCount;
       this.receivedTraces += traceCount;
@@ -435,10 +437,14 @@ public class DDAgentApi {
   }
 
   private static class MsgPackRequestBody extends RequestBody {
+    private final ByteBuffer dictionary;
     private final ByteBuffer traces;
+    private final int sizeInBytes;
 
-    private MsgPackRequestBody(ByteBuffer traces) {
+    private MsgPackRequestBody(ByteBuffer dictionary, ByteBuffer traces, int sizeInBytes) {
+      this.dictionary = dictionary;
       this.traces = traces;
+      this.sizeInBytes = sizeInBytes;
     }
 
     @Override
@@ -448,13 +454,20 @@ public class DDAgentApi {
 
     @Override
     public long contentLength() {
-      return traces.limit() - traces.position();
+      return sizeInBytes;
     }
 
     @Override
     public void writeTo(final BufferedSink sink) throws IOException {
+      if (null != dictionary) {
+        sink.write(dictionary);
+      }
       sink.write(traces);
       sink.flush();
     }
+  }
+
+  private static int sizeInBytes(ByteBuffer buffer) {
+    return null == buffer ? 0 : buffer.limit() - buffer.position();
   }
 }

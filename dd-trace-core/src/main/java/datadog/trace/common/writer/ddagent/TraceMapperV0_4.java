@@ -19,8 +19,8 @@ import static datadog.trace.core.serialization.msgpack.Util.writeLongAsString;
 
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.core.DDSpan;
-import datadog.trace.core.serialization.msgpack.Mapper;
 import datadog.trace.core.serialization.msgpack.Writable;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
@@ -88,9 +88,17 @@ public final class TraceMapperV0_4 implements TraceMapper {
           // TODO assess whether this is still worth it
           writable.writeObject(entry.getValue(), NO_CACHING);
         } else {
-          writable.writeString(String.valueOf(entry.getValue()), NO_CACHING);
+          writable.writeString(String.valueOf(entry.getValue()), CONSTANT_TAGS);
         }
       }
     }
   }
+
+  @Override
+  public ByteBuffer getDictionary() {
+    return null;
+  }
+
+  @Override
+  public void reset() {}
 }
