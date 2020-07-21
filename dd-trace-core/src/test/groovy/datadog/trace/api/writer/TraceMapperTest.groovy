@@ -38,8 +38,6 @@ class TraceMapperTest extends DDSpecification {
     1 == unpacker.unpackArrayHeader()
     long traceId = unpacker.unpackLong()
     traceId == 1
-    String serviceName = dictionary[unpacker.unpackInt()]
-    serviceName == "my-service"
     int baggageSize = unpacker.unpackMapHeader()
     for (int i = 0; i < baggageSize; ++i) {
       String key = dictionary[unpacker.unpackInt()]
@@ -51,7 +49,9 @@ class TraceMapperTest extends DDSpecification {
     spans.size() == spanCount
     for (int i = 0; i < spanCount; ++i) {
       int arrayLength = unpacker.unpackArrayHeader()
-      arrayLength == 10
+      arrayLength == 11
+      String serviceName = dictionary[unpacker.unpackInt()]
+      serviceName == "my-service"
       String operationName = dictionary[unpacker.unpackInt()]
       operationName == null
       dictionary[unpacker.unpackInt()]
