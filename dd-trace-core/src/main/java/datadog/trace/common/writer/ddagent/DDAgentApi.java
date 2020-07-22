@@ -121,7 +121,7 @@ public class DDAgentApi {
       final Request request =
           prepareRequest(tracesUrl)
               .addHeader(X_DATADOG_TRACE_COUNT, Integer.toString(representativeCount))
-              .put(new MsgPackRequestBody(dictionary, buffer, sizeInBytes))
+              .put(new MsgPackRequestBody(dictionary, buffer))
               .build();
       this.totalTraces += representativeCount;
       this.receivedTraces += traceCount;
@@ -441,10 +441,13 @@ public class DDAgentApi {
     private final ByteBuffer traces;
     private final int sizeInBytes;
 
-    private MsgPackRequestBody(ByteBuffer dictionary, ByteBuffer traces, int sizeInBytes) {
+    private MsgPackRequestBody(ByteBuffer dictionary, ByteBuffer traces) {
       this.dictionary = dictionary;
       this.traces = traces;
-      this.sizeInBytes = sizeInBytes;
+      this.sizeInBytes =
+          null != dictionary
+              ? 1 + sizeInBytes(dictionary) + sizeInBytes(traces)
+              : sizeInBytes(traces);
     }
 
     @Override
@@ -460,6 +463,8 @@ public class DDAgentApi {
     @Override
     public void writeTo(final BufferedSink sink) throws IOException {
       if (null != dictionary) {
+        // hack: make it a 2 element array to make it easier to write tests in the agent
+        sink.writeByte(0x90 | 2);
         sink.write(dictionary);
       }
       sink.write(traces);
