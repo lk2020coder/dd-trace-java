@@ -27,8 +27,6 @@ public final class TraceMapperV0_5 implements TraceMapper {
 
   private static final DictionaryFull DICTIONARY_FULL = new DictionaryFull();
 
-  // TODO probably need to modify Packer to make getting the dictionary
-  //  a bit less hacky
   private final ByteBuffer[] dictionary = new ByteBuffer[1];
   private final Packer dictionaryWriter =
       new Packer(
@@ -41,10 +39,8 @@ public final class TraceMapperV0_5 implements TraceMapper {
           ByteBuffer.allocate(2 << 20),
           true);
   private final DictionaryMapper dictionaryMapper = new DictionaryMapper();
-
-  private int code = 1;
-  // TODO use a primitive collection e.g. fastutil ObjectIntHashMap
   private final Map<Object, Integer> encoding = new HashMap<>();
+  private int code = 1;
 
   public TraceMapperV0_5() {
     reset();
@@ -61,11 +57,11 @@ public final class TraceMapperV0_5 implements TraceMapper {
     for (DDSpan span : trace) {
       writable.startArray(12);
       /* 1  */
-      writable.writeInt(getDictionaryCode(span.getServiceName()));
+      writeDictionaryEncoded(writable, span.getServiceName());
       /* 2  */
-      writable.writeInt(getDictionaryCode(span.getOperationName()));
+      writeDictionaryEncoded(writable, span.getOperationName());
       /* 3  */
-      writable.writeInt(getDictionaryCode(span.getResourceName()));
+      writeDictionaryEncoded(writable, span.getResourceName());
       /* 4  */
       writable.writeLong(span.getTraceId().toLong());
       /* 5  */
@@ -84,37 +80,39 @@ public final class TraceMapperV0_5 implements TraceMapper {
       writable.startMap(baggage.size() + tags.size());
       for (Map.Entry<String, String> entry : baggage.entrySet()) {
         if (!tags.containsKey(entry.getKey())) {
-          writable.writeInt(getDictionaryCode(entry.getKey()));
-          writable.writeInt(getDictionaryCode(entry.getValue()));
+          writeDictionaryEncoded(writable, entry.getKey());
+          writeDictionaryEncoded(writable, entry.getValue());
         }
       }
       for (Map.Entry<String, Object> entry : tags.entrySet()) {
-        writable.writeInt(getDictionaryCode(entry.getKey()));
-        writable.writeInt(getDictionaryCode(entry.getValue()));
+        writeDictionaryEncoded(writable, entry.getKey());
+        writeDictionaryEncoded(writable, entry.getValue());
       }
       /* 11  */
       writable.startMap(span.getMetrics().size());
       for (Map.Entry<String, Number> entry : span.getMetrics().entrySet()) {
-        writable.writeInt(getDictionaryCode(entry.getKey()));
+        writeDictionaryEncoded(writable, entry.getKey());
         writable.writeObject(entry.getValue(), NO_CACHING);
       }
       /* 12 */
-      writable.writeInt(getDictionaryCode(span.getType()));
+      writeDictionaryEncoded(writable, span.getType());
     }
   }
 
-  private int getDictionaryCode(Object value) {
+  private void writeDictionaryEncoded(Writable writable, Object value) {
     if (null == value) {
-      return 0;
+      writable.writeNull();
+    } else {
+      Integer encoded = encoding.get(value);
+      if (null == encoded) {
+        dictionaryWriter.format(value, dictionaryMapper);
+        encoding.put(value, code);
+        writable.writeInt(code);
+        ++code;
+      } else {
+        writable.writeInt(encoded);
+      }
     }
-    Integer encoded = encoding.get(value);
-    if (null == encoded) {
-      dictionaryWriter.format(value, dictionaryMapper);
-      int snapshot = code++;
-      encoding.put(value, snapshot);
-      return snapshot;
-    }
-    return encoded;
   }
 
   @Override
@@ -129,10 +127,7 @@ public final class TraceMapperV0_5 implements TraceMapper {
   public void reset() {
     dictionaryWriter.reset();
     dictionary[0] = null;
-    // null strings are always encoded as 0 for ease of decoding,
-    // so null needs to be the first element in the dictionary
-    dictionaryWriter.format(null, dictionaryMapper);
-    code = 1;
+    code = 0;
     encoding.clear();
   }
 
