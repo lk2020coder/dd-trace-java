@@ -559,6 +559,10 @@ acceptedBreaks:
       old: "method void datadog.trace.common.writer.ddagent.TraceMapper::<init>()"
       justification: "internal api"
     - code: "java.method.removed"
+      old: "method void datadog.trace.common.writer.ddagent.TraceProcessingDisruptor.TraceSerializingHandler::accept(int,\
+        \ java.nio.ByteBuffer)"
+      justification: "internal api"
+    - code: "java.method.removed"
       old: "method void java.lang.Object::finalize() throws java.lang.Throwable @\
         \ datadog.trace.common.writer.ddagent.TraceMapper"
       justification: "internal api"
