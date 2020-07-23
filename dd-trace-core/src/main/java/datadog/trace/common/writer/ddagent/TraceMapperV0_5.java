@@ -103,7 +103,7 @@ public final class TraceMapperV0_5 implements TraceMapper {
 
   private void writeDictionaryEncoded(Writable writable, Object value) {
     if (null == value) {
-      writable.writeNull();
+      writable.writeInt(0);
     } else {
       Integer encoded = encoding.get(value);
       if (null == encoded) {
@@ -133,7 +133,8 @@ public final class TraceMapperV0_5 implements TraceMapper {
   public void reset() {
     dictionaryWriter.reset();
     dictionary[0] = null;
-    code = 0;
+    dictionaryWriter.format(null, dictionaryMapper);
+    code = 1;
     encoding.clear();
   }
 

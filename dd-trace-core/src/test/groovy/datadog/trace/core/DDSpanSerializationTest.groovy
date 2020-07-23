@@ -148,7 +148,8 @@ class DDSpanSerializationTest extends DDSpecification {
     packer.flush()
     def dictionaryUnpacker = MessagePack.newDefaultUnpacker(traceMapper.getDictionary())
     String[] dictionary = new String[dictionaryUnpacker.unpackArrayHeader()]
-    for (int i = 0; i < dictionary.length; ++i) {
+    dictionaryUnpacker.unpackNil()
+    for (int i = 1; i < dictionary.length; ++i) {
       dictionary[i] = dictionaryUnpacker.unpackString()
     }
     def unpacker = MessagePack.newDefaultUnpacker(new ArrayBufferInput(capture.bytes))

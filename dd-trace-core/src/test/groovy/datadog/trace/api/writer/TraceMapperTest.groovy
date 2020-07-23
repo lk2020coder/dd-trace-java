@@ -30,55 +30,50 @@ class TraceMapperTest extends DDSpecification {
     MessageUnpacker dictionaryUnpacker = MessagePack.newDefaultUnpacker(dictionaryBytes)
     int dictionaryLength = dictionaryUnpacker.unpackArrayHeader()
     String[] dictionary = new String[dictionaryLength]
-    for (int i = 0; i < dictionary.length; ++i) {
+    dictionaryUnpacker.unpackNil()
+    for (int i = 1; i < dictionary.length; ++i) {
       dictionary[i] = dictionaryUnpacker.unpackString()
     }
     MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(sink.captured)
     1 == unpacker.unpackArrayHeader()
-    int spanCount = unpacker.unpackArrayHeader()
-    spans.size() == spanCount
-    for (int i = 0; i < spanCount; ++i) {
+    int traceCount = unpacker.unpackArrayHeader()
+    spans.size() == traceCount
+    for (int i = 0; i < traceCount; ++i) {
       int arrayLength = unpacker.unpackArrayHeader()
-      arrayLength == 11
-      if (!unpacker.tryUnpackNil()) {
-        String serviceName =  dictionary[unpacker.unpackInt()]
-        serviceName == "my-service"
-      }
-      assert unpacker.tryUnpackNil() // operation name null
-      if (!unpacker.tryUnpackNil()) {
-        String resourceName = dictionary[unpacker.unpackInt()]
-        resourceName != null
-      }
+      arrayLength == 12
+      String serviceName =  dictionary[unpacker.unpackInt()]
+      serviceName == "my-service"
+      String operationName = dictionary[unpacker.unpackInt()] // operation name null
+      operationName == null
+      String resourceName = dictionary[unpacker.unpackInt()]
+      resourceName != null
       long traceId = unpacker.unpackLong()
       traceId == 1
-      unpacker.unpackLong()
-      unpacker.unpackLong()
-      unpacker.unpackLong()
-      unpacker.unpackLong()
-      unpacker.unpackInt()
+      long spanId = unpacker.unpackLong()
+      spanId == 1
+      long parentId = unpacker.unpackLong()
+      parentId == 0
+      long start = unpacker.unpackLong()
+      start > 0
+      long duration = unpacker.unpackLong()
+      duration >= 0
+      int error = unpacker.unpackInt()
+      error == 0
       int metaHeader = unpacker.unpackMapHeader()
       for (int j = 0; j < metaHeader; ++j) {
-        if (!unpacker.tryUnpackNil()) {
-          String key = dictionary[unpacker.unpackInt()]
-          key != null
-        }
-        if (!unpacker.tryUnpackNil()) {
-          String value = dictionary[unpacker.unpackInt()]
-          value != null
-        }
+        String key = dictionary[unpacker.unpackInt()]
+        key != null
+        String value = dictionary[unpacker.unpackInt()]
+        value != null
       }
       int metricsHeader = unpacker.unpackMapHeader()
       for (int j = 0; j < metricsHeader; ++j) {
-        if (!unpacker.tryUnpackNil()) {
-          String key = dictionary[unpacker.unpackInt()]
-          key != null
-        }
+        String key = dictionary[unpacker.unpackInt()]
+        key != null
         unpacker.skipValue()
       }
-      if (!unpacker.tryUnpackNil()) {
-        String type = dictionary[unpacker.unpackInt()]
-        type != null
-      }
+      String type = dictionary[unpacker.unpackInt()]
+      type != null
     }
 
     where:
