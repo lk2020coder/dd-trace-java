@@ -11,7 +11,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -102,17 +101,14 @@ public class DDAgentApi {
     return new TraceMapperV0_4();
   }
 
-  Response sendSerializedTraces(
-      final int representativeCount,
-      final int traceCount,
-      final ByteBuffer dictionary,
-      final ByteBuffer buffer) {
-    final int sizeInBytes = sizeInBytes(dictionary) + sizeInBytes(buffer);
+  Response sendSerializedTraces(final Payload payload) {
+    final int sizeInBytes = payload.sizeInBytes();
     if (null == httpClient) {
       detectEndpointAndBuildClient();
       if (null == httpClient) {
         log.error("No datadog agent detected");
-        countAndLogFailedSend(traceCount, representativeCount, sizeInBytes, null, null);
+        countAndLogFailedSend(
+            payload.traceCount(), payload.representativeCount(), sizeInBytes, null, null);
         return Response.failed(agentRunning ? 404 : 503);
       }
     }
@@ -120,17 +116,18 @@ public class DDAgentApi {
     try {
       final Request request =
           prepareRequest(tracesUrl)
-              .addHeader(X_DATADOG_TRACE_COUNT, Integer.toString(representativeCount))
-              .put(new MsgPackRequestBody(dictionary, buffer))
+              .addHeader(X_DATADOG_TRACE_COUNT, Integer.toString(payload.representativeCount()))
+              .put(new MsgPackRequestBody(payload))
               .build();
-      this.totalTraces += representativeCount;
-      this.receivedTraces += traceCount;
+      this.totalTraces += payload.representativeCount();
+      this.receivedTraces += payload.traceCount();
       try (final okhttp3.Response response = httpClient.newCall(request).execute()) {
         if (response.code() != 200) {
-          countAndLogFailedSend(traceCount, representativeCount, sizeInBytes, response, null);
+          countAndLogFailedSend(
+              payload.traceCount(), payload.representativeCount(), sizeInBytes, response, null);
           return Response.failed(response.code());
         }
-        countAndLogSuccessfulSend(traceCount, representativeCount, sizeInBytes);
+        countAndLogSuccessfulSend(payload.traceCount(), payload.representativeCount(), sizeInBytes);
         String responseString = null;
         try {
           responseString = response.body().string().trim();
@@ -149,7 +146,8 @@ public class DDAgentApi {
         }
       }
     } catch (final IOException e) {
-      countAndLogFailedSend(traceCount, representativeCount, sizeInBytes, null, e);
+      countAndLogFailedSend(
+          payload.traceCount(), payload.representativeCount(), sizeInBytes, null, e);
       return Response.failed(e);
     }
   }
@@ -437,17 +435,11 @@ public class DDAgentApi {
   }
 
   private static class MsgPackRequestBody extends RequestBody {
-    private final ByteBuffer dictionary;
-    private final ByteBuffer traces;
-    private final int sizeInBytes;
 
-    private MsgPackRequestBody(ByteBuffer dictionary, ByteBuffer traces) {
-      this.dictionary = dictionary;
-      this.traces = traces;
-      this.sizeInBytes =
-          null != dictionary
-              ? 1 + sizeInBytes(dictionary) + sizeInBytes(traces)
-              : sizeInBytes(traces);
+    private final Payload payload;
+
+    private MsgPackRequestBody(Payload payload) {
+      this.payload = payload;
     }
 
     @Override
@@ -457,22 +449,12 @@ public class DDAgentApi {
 
     @Override
     public long contentLength() {
-      return sizeInBytes;
+      return payload.sizeInBytes();
     }
 
     @Override
-    public void writeTo(final BufferedSink sink) throws IOException {
-      if (null != dictionary) {
-        // hack: make it a 2 element array to make it easier to write tests in the agent
-        sink.writeByte(0x90 | 2);
-        sink.write(dictionary);
-      }
-      sink.write(traces);
-      sink.flush();
+    public void writeTo(BufferedSink sink) throws IOException {
+      payload.writeTo(sink);
     }
-  }
-
-  private static int sizeInBytes(ByteBuffer buffer) {
-    return null == buffer ? 0 : buffer.limit() - buffer.position();
   }
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import datadog.trace.common.sampling.RateByServiceSampler
 import datadog.trace.common.writer.ddagent.DDAgentApi
 import datadog.trace.common.writer.ddagent.DDAgentResponseListener
+import datadog.trace.common.writer.ddagent.Payload
 import datadog.trace.common.writer.ddagent.TraceMapperV0_4
 import datadog.trace.common.writer.ddagent.TraceMapperV0_5
 import datadog.trace.core.DDSpan
@@ -47,10 +48,10 @@ class DDAgentApiTest extends DDSpecification {
     setup:
     def agent = newAgent(agentVersion)
     def client = new DDAgentApi("localhost", agent.address.port, null, 1000)
-    def request = prepareTraces(agentVersion, [])
+    def payload = prepareTraces(agentVersion, [])
 
     expect:
-    def response = client.sendSerializedTraces(request.traceCount, request.representativeCount, null, request.buffer)
+    def response = client.sendSerializedTraces(payload)
     response.success()
     response.status() == 200
     agent.getLastRequest().path == "/" + agentVersion
@@ -95,9 +96,9 @@ class DDAgentApiTest extends DDSpecification {
       }
     }
     def client = new DDAgentApi("localhost", agent.address.port, null, 1000)
-    Traces request = prepareTraces("v0.3/traces", [])
+    Payload payload = prepareTraces("v0.3/traces", [])
     expect:
-    def response = client.sendSerializedTraces(request.traceCount, request.representativeCount, null, request.buffer)
+    def response = client.sendSerializedTraces(payload)
     !response.success()
     response.status() == 404
     agent.getLastRequest().path == "/v0.3/traces"
@@ -116,10 +117,10 @@ class DDAgentApiTest extends DDSpecification {
       }
     }
     def client = new DDAgentApi("localhost", agent.address.port, null, 1000)
-    def request = prepareTraces(agentVersion, traces)
+    def payload = prepareTraces(agentVersion, traces)
 
     expect:
-    client.sendSerializedTraces(request.traceCount, request.representativeCount, null, request.buffer).success()
+    client.sendSerializedTraces(payload).success()
     agent.lastRequest.contentType == "application/msgpack"
     agent.lastRequest.headers.get("Datadog-Meta-Lang") == "java"
     agent.lastRequest.headers.get("Datadog-Meta-Lang-Version") == System.getProperty("java.version", "unknown")
@@ -194,10 +195,10 @@ class DDAgentApiTest extends DDSpecification {
     }
     def client = new DDAgentApi("localhost", agent.address.port, null, 1000)
     client.addResponseListener(responseListener)
-    def request = prepareTraces(agentVersion, [[], [], []])
+    def payload = prepareTraces(agentVersion, [[], [], []])
 
     when:
-    client.sendSerializedTraces(request.traceCount, request.representativeCount, null, request.buffer)
+    client.sendSerializedTraces(payload)
     then:
     agentResponse.get() == ["hello": [:]]
     agent.lastRequest.headers.get("Datadog-Meta-Lang") == "java"
@@ -223,9 +224,9 @@ class DDAgentApiTest extends DDSpecification {
       }
     }
     def client = new DDAgentApi("localhost", v3Agent.address.port, null, 1000)
-    def request = prepareTraces("v0.4/traces", [])
+    def payload = prepareTraces("v0.4/traces", [])
     expect:
-    client.sendSerializedTraces(request.traceCount, request.representativeCount, null, request.buffer).success()
+    client.sendSerializedTraces(payload).success()
     v3Agent.getLastRequest().path == "/v0.3/traces"
 
     cleanup:
@@ -250,8 +251,8 @@ class DDAgentApiTest extends DDSpecification {
     }
     def port = badPort ? 999 : agent.address.port
     def client = new DDAgentApi("localhost", port, null, 1000)
-    def request = prepareTraces("v0.4/traces", [])
-    def result = client.sendSerializedTraces(request.traceCount, request.representativeCount, null, request.buffer)
+    def payload = prepareTraces("v0.4/traces", [])
+    def result = client.sendSerializedTraces(payload)
 
     expect:
     result.success() == !badPort // Expect success of port is ok
@@ -282,9 +283,9 @@ class DDAgentApiTest extends DDSpecification {
       }
     }
     def client = new DDAgentApi("localhost", agent.address.port, null, 1000)
-    def request = prepareTraces(agentVersion, traces)
+    def payload = prepareTraces(agentVersion, traces)
     when:
-    def success = client.sendSerializedTraces(request.traceCount, request.representativeCount, null, request.buffer).success()
+    def success = client.sendSerializedTraces(payload).success()
     then:
     success
     receivedContentLength.get() == expectedLength
@@ -294,7 +295,8 @@ class DDAgentApiTest extends DDSpecification {
 
     // all the tested traces are empty (why?) and it just so happens that
     // arrays and maps take the same amount of space in messagepack, so
-    // all the sizes match
+    // all the sizes match, except in v0.5 where there is 1 byte for a
+    // 2 element array header and 1 byte for an empty dictionary
     where:
     agentVersion   |       expectedLength | traces
     "v0.4/traces"  | 1                    | []
@@ -303,12 +305,12 @@ class DDAgentApiTest extends DDSpecification {
     "v0.4/traces"  | 19                   | (1..16).collect { [] }
     "v0.4/traces"  | 65538                | (1..((1 << 16) - 1)).collect { [] }
     "v0.4/traces"  | 65541                | (1..(1 << 16)).collect { [] }
-    "v0.5/traces"  | 1                    | []
-    "v0.5/traces"  | 3                    | [[], []]
-    "v0.5/traces"  | 16                   | (1..15).collect { [] }
-    "v0.5/traces"  | 19                   | (1..16).collect { [] }
-    "v0.5/traces"  | 65538                | (1..((1 << 16) - 1)).collect { [] }
-    "v0.5/traces"  | 65541                | (1..(1 << 16)).collect { [] }
+    "v0.5/traces"  | 1 + 1 + 1            | []
+    "v0.5/traces"  | 3 + 1 + 1            | [[], []]
+    "v0.5/traces"  | 16 + 1 + 1           | (1..15).collect { [] }
+    "v0.5/traces"  | 19 + 1 + 1           | (1..16).collect { [] }
+    "v0.5/traces"  | 65538 + 1 + 1        | (1..((1 << 16) - 1)).collect { [] }
+    "v0.5/traces"  | 65541 + 1 + 1        | (1..(1 << 16)).collect { [] }
   }
 
   static List<List<TreeMap<String, Object>>> convertList(String agentVersion, byte[] bytes) {
@@ -346,6 +348,22 @@ class DDAgentApiTest extends DDSpecification {
     return maps
   }
 
+  Payload prepareTraces(String agentVersion, List<List<DDSpan>> traces) {
+    ByteBuffer buffer = ByteBuffer.allocate(1 << 20)
+    Traces traceCapture = new Traces()
+    def packer = new Packer(traceCapture, buffer)
+    def traceMapper = agentVersion.equals("v0.5/traces")
+      ? new TraceMapperV0_5()
+      : new TraceMapperV0_4()
+    for (trace in traces) {
+      packer.format(trace, traceMapper)
+    }
+    packer.flush()
+    return traceMapper.newPayload()
+      .withBody(traceCapture.traceCount, traceCapture.buffer)
+      .withRepresentativeCount(traceCapture.representativeCount)
+  }
+
   static class Traces implements ByteBufferConsumer {
     int traceCount
     int representativeCount
@@ -357,19 +375,5 @@ class DDAgentApiTest extends DDSpecification {
       this.representativeCount = messageCount
       this.traceCount = messageCount
     }
-  }
-
-  Traces prepareTraces(String agentVersion, List<List<DDSpan>> traces) {
-    ByteBuffer buffer = ByteBuffer.allocate(1 << 20)
-    Traces tracesToSend = new Traces()
-    def packer = new Packer(tracesToSend, buffer)
-    def traceMapper = agentVersion.equals("v0.5/traces")
-      ? new TraceMapperV0_5()
-      : new TraceMapperV0_4()
-    for (trace in traces) {
-      packer.format(trace, traceMapper)
-    }
-    packer.flush()
-    return tracesToSend
   }
 }

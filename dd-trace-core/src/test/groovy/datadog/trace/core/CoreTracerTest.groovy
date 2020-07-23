@@ -20,8 +20,6 @@ import org.junit.contrib.java.lang.system.EnvironmentVariables
 import org.junit.contrib.java.lang.system.RestoreSystemProperties
 import spock.lang.Timeout
 
-import java.nio.ByteBuffer
-
 import static datadog.trace.api.Config.PREFIX
 import static datadog.trace.api.config.GeneralConfig.HEALTH_METRICS_ENABLED
 import static datadog.trace.api.config.TracerConfig.HEADER_TAGS
@@ -112,10 +110,10 @@ class CoreTracerTest extends DDSpecification {
     when:
     System.setProperty(PREFIX + key, value)
     def tracer = CoreTracer.builder().config(new Config()).build()
-    then:
-    tracer.writer instanceof DDAgentWriter
     // this test has no business reaching into the internals of another subsystem like this
-    ((DDAgentWriter) tracer.writer).api.sendSerializedTraces(0, 0, null, ByteBuffer.allocate(0))
+    ((DDAgentWriter) tracer.writer).api.detectEndpointAndBuildClient()
+
+    then:
     ((DDAgentWriter) tracer.writer).api.tracesUrl.host() == value
     ((DDAgentWriter) tracer.writer).api.tracesUrl.port() == 8126
 
@@ -128,10 +126,9 @@ class CoreTracerTest extends DDSpecification {
     when:
     System.setProperty(PREFIX + key, value)
     def tracer = CoreTracer.builder().config(new Config()).build()
+    ((DDAgentWriter) tracer.writer).api.detectEndpointAndBuildClient()
 
     then:
-    tracer.writer instanceof DDAgentWriter
-    ((DDAgentWriter) tracer.writer).api.sendSerializedTraces(0, 0, null, ByteBuffer.allocate(0))
     ((DDAgentWriter) tracer.writer).api.tracesUrl.host() == "localhost"
     ((DDAgentWriter) tracer.writer).api.tracesUrl.port() == Integer.valueOf(value)
 

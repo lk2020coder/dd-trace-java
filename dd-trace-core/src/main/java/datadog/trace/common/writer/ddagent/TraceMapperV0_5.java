@@ -10,8 +10,10 @@ import datadog.trace.core.serialization.msgpack.ByteBufferConsumer;
 import datadog.trace.core.serialization.msgpack.Mapper;
 import datadog.trace.core.serialization.msgpack.Packer;
 import datadog.trace.core.serialization.msgpack.Writable;
+import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -116,7 +118,11 @@ public final class TraceMapperV0_5 implements TraceMapper {
   }
 
   @Override
-  public ByteBuffer getDictionary() {
+  public Payload newPayload() {
+    return new PayloadV0_5(getDictionary());
+  }
+
+  private ByteBuffer getDictionary() {
     if (dictionary[0] == null) {
       dictionaryWriter.flush();
     }
@@ -155,6 +161,29 @@ public final class TraceMapperV0_5 implements TraceMapper {
         }
         packer.writeUTF8(utf8);
       }
+    }
+  }
+
+  private static class PayloadV0_5 extends Payload {
+
+    // msgpack array header with 2 elements (FIXARRAY | 2)
+    private final ByteBuffer header = ByteBuffer.allocate(1).put(0, (byte) 0x92);
+    private final ByteBuffer dictionary;
+
+    private PayloadV0_5(ByteBuffer dictionary) {
+      this.dictionary = dictionary;
+    }
+
+    @Override
+    int sizeInBytes() {
+      return sizeInBytes(header) + sizeInBytes(dictionary) + sizeInBytes(body);
+    }
+
+    @Override
+    void writeTo(WritableByteChannel channel) throws IOException {
+      writeBufferToChannel(header, channel);
+      writeBufferToChannel(dictionary, channel);
+      writeBufferToChannel(body, channel);
     }
   }
 }
